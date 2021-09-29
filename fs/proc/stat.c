@@ -250,7 +250,7 @@ static ssize_t split_write(struct file *file, const char __user *ubuf,
 		return -EFAULT;
 	if (copy_from_user(buf, ubuf, len))
 		return -EFAULT;
-	if (kstrtoint(strim(buf), 10, &split))
+	if (sscanf(buf, "%d", &split) != 1)
 		return -EFAULT;
 	if (split < 0)
 		return -EFAULT;

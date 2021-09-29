@@ -3,6 +3,7 @@
 #include <uapi/linux/udp.h>
 #include <uapi/linux/tcp.h>
 #include <uapi/linux/in.h>
+#include <linux/ip.h>
 
 
 int PPSYNC_SPLIT = 0;
@@ -27,6 +28,7 @@ static int __port_is_high_priority(u16 port)
 	}
 	return 0;
 }
+
 
 static int __skb_check_l3_l4(u8 *cursor)
 {
@@ -60,6 +62,7 @@ static int __skb_check_l3_l4(u8 *cursor)
 	return 0;
 }
 
+
 int skb_is_high_priority(const struct sk_buff *skb)
 {
 	u8 *cursor = skb->head;
@@ -69,3 +72,11 @@ int skb_is_high_priority(const struct sk_buff *skb)
 	return __skb_check_l3_l4(cursor);
 }
 EXPORT_SYMBOL(skb_is_high_priority);
+
+
+int skb_is_high_priority_tx(const struct sk_buff *skb)
+{
+	u8 *cursor = (u8 *)ip_hdr(skb);
+	return __skb_check_l3_l4(cursor);
+}
+EXPORT_SYMBOL(skb_is_high_priority_tx);

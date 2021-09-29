@@ -82,6 +82,8 @@
 #include <linux/netlink.h>
 #include <linux/tcp.h>
 
+extern int skb_is_high_priority_tx(const struct sk_buff *skb);
+
 static int
 ip_fragment(struct net *net, struct sock *sk, struct sk_buff *skb,
 	    unsigned int mtu,
@@ -176,6 +178,8 @@ int ip_build_and_send_pkt(struct sk_buff *skb, const struct sock *sk,
 	skb->priority = sk->sk_priority;
 	if (!skb->mark)
 		skb->mark = sk->sk_mark;
+
+	skb->high_priority = skb_is_high_priority_tx(skb);
 
 	/* Send it out. */
 	return ip_local_out(net, skb->sk, skb);
@@ -528,6 +532,8 @@ packet_routed:
 	/* TODO : should we use skb->sk here instead of sk ? */
 	skb->priority = sk->sk_priority;
 	skb->mark = sk->sk_mark;
+
+	skb->high_priority = skb_is_high_priority_tx(skb);
 
 	res = ip_local_out(net, sk, skb);
 	rcu_read_unlock();
@@ -1558,6 +1564,8 @@ out:
 int ip_send_skb(struct net *net, struct sk_buff *skb)
 {
 	int err;
+
+	skb->high_priority = skb_is_high_priority_tx(skb);
 
 	err = ip_local_out(net, skb->sk, skb);
 	if (err) {
