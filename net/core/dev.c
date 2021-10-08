@@ -3891,8 +3891,8 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 static inline void ____napi_schedule_priority(struct softnet_data *sd,
 					      struct napi_struct *napi)
 {
-	list_del_init(&napi->poll_list);
-	list_add(&napi->poll_list, &sd->poll_list);
+	// list_del_init(&napi->poll_list);
+	// list_add(&napi->poll_list, &sd->poll_list);
 }
 
 #ifdef CONFIG_RPS
@@ -4204,8 +4204,9 @@ enqueue_priority:
 					____napi_schedule(sd, &sd->backlog);
 			}
 
-			if (!list_is_first(&(sd->backlog.poll_list), &(sd->poll_list)))
-				____napi_schedule_priority(sd, &sd->backlog);
+			/* move the backlog to the head of poll_list */
+			// list_move(&(sd->backlog.poll_list), &sd->poll_list);
+
 			goto enqueue_priority;
 		}
 	} else {
