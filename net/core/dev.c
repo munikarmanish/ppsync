@@ -3891,8 +3891,9 @@ static inline void ____napi_schedule(struct softnet_data *sd,
 static inline void ____napi_schedule_priority(struct softnet_data *sd,
 					      struct napi_struct *napi)
 {
-	// list_del_init(&napi->poll_list);
-	// list_add(&napi->poll_list, &sd->poll_list);
+	list_del_init(&napi->poll_list);
+	list_add(&napi->poll_list, &sd->poll_list);
+	// __raise_softirq_irqoff(NET_RX_SOFTIRQ);
 }
 
 #ifdef CONFIG_RPS
@@ -4205,7 +4206,10 @@ enqueue_priority:
 			}
 
 			/* move the backlog to the head of poll_list */
-			// list_move(&(sd->backlog.poll_list), &sd->poll_list);
+			// if (!list_is_first(&sd->backlog.poll_list, &sd->poll_list)) {
+			// 	printk(KERN_DEBUG "enqueue_to_backlog: moving to the head of poll_list");
+			// 	list_move(&sd->backlog.poll_list, &sd->poll_list);
+			// }
 
 			goto enqueue_priority;
 		}
@@ -5893,7 +5897,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 	struct softnet_data *sd = container_of(napi, struct softnet_data, backlog);
 	bool again = true;
 	int work = 0;
-	unsigned long flags;
+	// unsigned long flags;
 	struct sk_buff *skb;
 
 	/* Check if we have pending ipi, its better to send them now,
@@ -5913,8 +5917,9 @@ static int process_backlog(struct napi_struct *napi, int quota)
 			__netif_receive_skb(skb);
 			rcu_read_unlock();
 			input_queue_head_incr(sd);
+			work++;
 			// if (++work >= quota)
-			// 	return work;
+			// 	return work
 		}
 		local_irq_disable();
 		rps_lock(sd);
@@ -5940,14 +5945,8 @@ static int process_backlog(struct napi_struct *napi, int quota)
 
 	/* if we processed priority packet, requeue this device to normal queue and leave */
 	if (work > 0) {
-		local_irq_save(flags);
-		rps_lock(sd);
-		if (!__test_and_set_bit(NAPI_STATE_SCHED, &sd->backlog.state)) {
-			if (!rps_ipi_queued(sd))
-				____napi_schedule(sd, &sd->backlog);
-		}
-		rps_unlock(sd);
-		local_irq_restore(flags);
+		napi_schedule(napi);
+		printk(KERN_EMERG "process_backlog: work_priority = %d", work);
 		return work;
 	}
 
@@ -5984,6 +5983,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 		local_irq_enable();
 	}
 
+	printk(KERN_EMERG "process_backlog: work = %d", work);
 	return work;
 }
 
@@ -6410,8 +6410,7 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 		trace_napi_poll(n, work, weight);
 	}
 
-	// WARN_ON_ONCE(work > weight);
-
+	WARN_ON_ONCE(work > weight);
 	if (likely(work < weight))
 		goto out_unlock;
 
@@ -6464,19 +6463,16 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
 	for (;;) {
 		local_irq_disable();
 		list_splice_tail_init(&repoll, &sd->poll_list);
-		n = list_first_entry_or_null(&sd->poll_list, struct napi_struct, poll_list);
-		if (n)
+		if ((n = list_first_entry_or_null(&sd->poll_list, struct napi_struct, poll_list)))
 			list_del_init(&n->poll_list);
 		local_irq_enable();
 
-		// if (list_empty(&list)) {
 		if (!n) {
 			if (!sd_has_rps_ipi_waiting(sd))
 				goto out;
 			break;
 		}
 
-		// n = list_first_entry(&list, struct napi_struct, poll_list);
 		budget -= napi_poll(n, &repoll);
 
 		/* If softirq window is exhausted then punt.
@@ -6492,7 +6488,6 @@ static __latent_entropy void net_rx_action(struct softirq_action *h)
 
 	local_irq_disable();
 
-	// list_splice_tail_init(&sd->poll_list, &list);
 	list_splice_tail(&repoll, &sd->poll_list);
 	if (!list_empty(&sd->poll_list))
 		__raise_softirq_irqoff(NET_RX_SOFTIRQ);
