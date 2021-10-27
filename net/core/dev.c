@@ -4206,10 +4206,10 @@ enqueue_priority:
 			}
 
 			/* move the backlog to the head of poll_list */
-			// if (!list_is_first(&sd->backlog.poll_list, &sd->poll_list)) {
-			// 	printk(KERN_DEBUG "enqueue_to_backlog: moving to the head of poll_list");
-			// 	list_move(&sd->backlog.poll_list, &sd->poll_list);
-			// }
+			if (!list_is_first(&sd->backlog.poll_list, &sd->poll_list)) {
+				// printk(KERN_DEBUG "enqueue_to_backlog: moving to the head of poll_list");
+				list_move(&sd->backlog.poll_list, &sd->poll_list);
+			}
 
 			goto enqueue_priority;
 		}
@@ -5897,7 +5897,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 	struct softnet_data *sd = container_of(napi, struct softnet_data, backlog);
 	bool again = true;
 	int work = 0;
-	// unsigned long flags;
+	unsigned long flags;
 	struct sk_buff *skb;
 
 	/* Check if we have pending ipi, its better to send them now,
@@ -5943,12 +5943,24 @@ static int process_backlog(struct napi_struct *napi, int quota)
 		local_irq_enable();
 	}
 
+	if (work > 0)
+		return -work;
+
 	/* if we processed priority packet, requeue this device to normal queue and leave */
+	/*
 	if (work > 0) {
-		napi_schedule(napi);
-		printk(KERN_EMERG "process_backlog: work_priority = %d", work);
+		// printk(KERN_EMERG "process_backlog: work_priority = %d", work);
+		local_irq_save(flags);
+		rps_lock(sd);
+		if (!__test_and_set_bit(NAPI_STATE_SCHED, &sd->backlog.state)) {
+			if (!rps_ipi_queued(sd))
+				____napi_schedule(sd, &sd->backlog);
+		}
+		rps_unlock(sd);
+		local_irq_restore(flags);
 		return work;
 	}
+	*/
 
 	/* process the normal queue */
 	again = true;
@@ -5983,7 +5995,7 @@ static int process_backlog(struct napi_struct *napi, int quota)
 		local_irq_enable();
 	}
 
-	printk(KERN_EMERG "process_backlog: work = %d", work);
+	// printk(KERN_EMERG "process_backlog: work = %d", work);
 	return work;
 }
 
@@ -6390,7 +6402,7 @@ EXPORT_SYMBOL(netif_napi_del);
 static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 {
 	void *have;
-	int work, weight;
+	int work, weight, priority = 0;
 
 	// list_del_init(&n->poll_list);
 
@@ -6407,11 +6419,15 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 	work = 0;
 	if (test_bit(NAPI_STATE_SCHED, &n->state)) {
 		work = n->poll(n, weight);
+		if (work < 0) {
+			work = -work;
+			priority = 1;
+		}
 		trace_napi_poll(n, work, weight);
 	}
 
 	WARN_ON_ONCE(work > weight);
-	if (likely(work < weight))
+	if (likely(priority == 0 && work < weight))
 		goto out_unlock;
 
 	/* Drivers must not modify the NAPI state if they
@@ -6436,11 +6452,11 @@ static int napi_poll(struct napi_struct *n, struct list_head *repoll)
 	/* Some drivers may have called napi_schedule
 	 * prior to exhausting their budget.
 	 */
-	if (unlikely(!list_empty(&n->poll_list))) {
-		pr_warn_once("%s: Budget exhausted after napi rescheduled\n",
-			     n->dev ? n->dev->name : "backlog");
-		goto out_unlock;
-	}
+	// if (unlikely(!list_empty(&n->poll_list))) {
+	// 	pr_warn_once("%s: Budget exhausted after napi rescheduled\n",
+	// 		     n->dev ? n->dev->name : "backlog");
+	// 	goto out_unlock;
+	// }
 
 	if (list_empty(&n->poll_list))
 		list_add_tail(&n->poll_list, repoll);
