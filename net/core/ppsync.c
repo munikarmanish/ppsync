@@ -15,6 +15,9 @@ EXPORT_SYMBOL(N_PPSYNC_PORTS);
 u16 PPSYNC_PORTS[10] = {0};
 EXPORT_SYMBOL(PPSYNC_PORTS);
 
+int PPSYNC_SYNC = 0;
+EXPORT_SYMBOL(PPSYNC_SYNC);
+
 
 static int __port_is_high_priority(u16 port)
 {

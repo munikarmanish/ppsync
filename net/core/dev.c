@@ -154,6 +154,7 @@
 // EXPORT_SYMBOL(N_PPSYNC_PORTS);
 // u16 PPSYNC_PORT = 0;
 // EXPORT_SYMBOL(PPSYNC_PORT);
+extern int PPSYNC_SYNC;
 
 #define MAX_GRO_SKBS 8
 
@@ -4450,29 +4451,33 @@ static int netif_rx_internal(struct sk_buff *skb)
 
 	trace_netif_rx(skb);
 
+	if (skb->high_priority && PPSYNC_SYNC) {
+		netif_receive_skb(skb);
+	} else {
 #ifdef CONFIG_RPS
-	if (static_branch_unlikely(&rps_needed)) {
-		struct rps_dev_flow voidflow, *rflow = &voidflow;
-		int cpu;
+		if (static_branch_unlikely(&rps_needed)) {
+			struct rps_dev_flow voidflow, *rflow = &voidflow;
+			int cpu;
 
-		preempt_disable();
-		rcu_read_lock();
+			preempt_disable();
+			rcu_read_lock();
 
-		cpu = get_rps_cpu(skb->dev, skb, &rflow);
-		if (cpu < 0)
-			cpu = smp_processor_id();
+			cpu = get_rps_cpu(skb->dev, skb, &rflow);
+			if (cpu < 0)
+				cpu = smp_processor_id();
 
-		ret = enqueue_to_backlog(skb, cpu, &rflow->last_qtail);
+			ret = enqueue_to_backlog(skb, cpu, &rflow->last_qtail);
 
-		rcu_read_unlock();
-		preempt_enable();
-	} else
+			rcu_read_unlock();
+			preempt_enable();
+		} else
 #endif
-	{
-		unsigned int qtail;
+		{
+			unsigned int qtail;
 
-		ret = enqueue_to_backlog(skb, get_cpu(), &qtail);
-		put_cpu();
+			ret = enqueue_to_backlog(skb, get_cpu(), &qtail);
+			put_cpu();
+		}
 	}
 	return ret;
 }

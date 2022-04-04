@@ -7,6 +7,8 @@
 #include <uapi/linux/udp.h>
 #include <linux/list.h>
 
+extern int PPSYNC_SYNC;
+
 struct gro_cell {
 	struct sk_buff_head	napi_skbs;
 	struct sk_buff_head	napi_skbs_priority;
@@ -39,7 +41,10 @@ drop:
 	}
 
 	if (skb->high_priority) {
-		netif_rx(skb);
+		if (PPSYNC_SYNC)
+			netif_receive_skb(skb);
+		else
+			netif_rx(skb);
 	} else {
 		__skb_queue_tail(&cell->napi_skbs, skb);
 		if (skb_queue_len(&cell->napi_skbs) == 1)

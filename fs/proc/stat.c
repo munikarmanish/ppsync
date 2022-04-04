@@ -331,11 +331,57 @@ static const struct file_operations port_ops = {
 	.release	= single_release,
 };
 
+//============== PPSYNC_SYNC =================================================
+
+extern int PPSYNC_SYNC;
+
+static int sync_show(struct seq_file *p, void *v)
+{
+	seq_printf(p, "%d\n", PPSYNC_SYNC);
+	return 0;
+}
+
+static int sync_open(struct inode *inode, struct file *file)
+{
+	return single_open(file, sync_show, NULL);
+}
+
+static ssize_t sync_write(struct file *file, const char __user *ubuf,
+			   size_t size, loff_t *pos)
+{
+	char buf[101] = {0};
+	int len, sync;
+
+	len = size;
+	if (len > 100)
+		return -EFAULT;
+	if (copy_from_user(buf, ubuf, len))
+		return -EFAULT;
+	if (sscanf(buf, "%d", &sync) != 1)
+		return -EFAULT;
+	if (sync < 0)
+		return -EFAULT;
+
+	PPSYNC_SYNC = sync;
+
+	len = strlen(buf);
+	return len;
+}
+
+static const struct file_operations sync_ops = {
+	.open		= sync_open,
+	.read		= seq_read,
+	.write		= sync_write,
+	.llseek		= seq_lseek,
+	.release	= single_release,
+};
+
 static int __init proc_stat_init(void)
 {
 	proc_create("stat", 0, NULL, &proc_stat_operations);
 	proc_create("split", 0666, NULL, &split_ops);
 	proc_create("port", 0666, NULL, &port_ops);
+	proc_create("sync", 0666, NULL, &sync_ops);
 	return 0;
 }
 
